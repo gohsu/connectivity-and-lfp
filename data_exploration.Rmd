@@ -1,0 +1,87 @@
+---
+title: "Data Exploration"
+author: "Su Goh"
+date: "12/12/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load data and do simple linear regression
+```{r}
+df <- read.csv('data/CA16_CTs_all.csv')
+model_general <- lm(lfp_female ~ pca1_stock, data=df)
+summary(model_general)
+plot(df$lfp_female ~ df$pca1_stock)
+abline(model_general)
+plot(model_general$residuals)
+```
+Statistically significant at 5% but the plot shows us that it's not a very linear relationship... Residuals seem to be about 0 so we're just going to pretend that it is linear.
+
+## Montreal
+```{r}
+mtl_data <- df[df$region_name == "Montréal",]
+model_mtl <- lm(lfp_female ~ pca1_stock, data=mtl_data)
+plot(mtl_data$lfp_female ~ mtl_data$pca1_stock, main="Montreal", xlab="SNDi", ylab="Female LFP")
+abline(model_mtl)
+summary(model_mtl)
+```
+SNDI has a pretty strong effect on female LFP. 
+
+## Toronto
+```{r}
+to_data <- df[df$region_name == "Toronto",]
+model_to <- lm(lfp_female ~ pca1_stock, data=to_data)
+plot(to_data$lfp_female ~ to_data$pca1_stock, main="Toronto", xlab="SNDi", ylab="Female LFP")
+abline(model_to)
+summary(model_to)
+```
+
+## Vancouver
+```{r}
+van_data <- df[df$region_name == "Vancouver",]
+model_van <- lm(lfp_female ~ pca1_stock, data=van_data)
+plot(van_data$lfp_female ~ van_data$pca1_stock, main="Vancouver", xlab="SNDi", ylab="Female LFP")
+abline(model_van)
+summary(model_van)
+```
+Even stronger effect on LFP than in Montreal and Toronto!
+
+## Commuting behaviour
+### Mode
+```{r, echo=FALSE, fig.height = 5, fig.width = 6, fig.align = "center"}
+boxplot(df$commute_car_male, df$commute_car_female, main="Car", names=c("Male", "Female"))
+boxplot(df$commute_publictransit_male, df$commute_publictransit_female, main="Public Transit", names=c("Male", "Female"))
+```
+do t test?
+
+### Duration
+```{r, echo=FALSE, fig.height = 5, fig.width = 6, fig.align = "center"}
+boxplot(df$commute_time_lt15_male, df$commute_time_lt15_female, main="< 15 minutes", names=c("Male", "Female"))
+boxplot(df$commute_time_15to29_male, df$commute_time_15to29_female, main = "15 - 29 minutes", names=c("Male", "Female"))
+boxplot(df$commute_time_30to44_male, df$commute_time_30to44_female, main = "30 - 44 minutes", names=c("Male", "Female"))
+boxplot(df$commute_time_45to59_male, df$commute_time_45to59_female, main = "45 - 59 minutes", names=c("Male", "Female"))
+boxplot(df$commute_time_gt60_male, df$commute_time_gt60_female, main = "> 60 minutes", names=c("Male", "Female"))
+```
+
+## Big model
+```{r}
+model_multi <- lm(df$lfp_female ~ df$avg_hh_size 
+                  + df$hh_with_children_single_parents 
+                  + df$hh_with_children_couples
+                  + df$med_hh_income_thousands
+                  + df$avg_rooms_per_dwelling
+                  + df$commute_car_female 
+                  + df$commute_publictransit_female
+                  + df$commute_time_lt15_female
+                  + df$commute_time_15to29_female
+                  + df$commute_time_30to44_female
+                  + df$commute_time_45to59_female
+                  + df$commute_time_gt60_female
+                  + df$pca1_stock)
+summary(model_multi)
+```
+
+Hmmm...... all stat sig?? something's not right

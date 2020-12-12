@@ -72,6 +72,8 @@ get_ct_data <- function(){
                                    "commute_time_gt60_male",
                                    "commute_time_gt60_female"
                                    )
+  census_cts$med_hh_income_thousands <- census_cts$med_hh_income / 1000
+  census_cts$med_hh_income <- NULL
   write.csv(census_cts, "data/CA16_CTs_cancensus.csv")
 }
 
