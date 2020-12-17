@@ -2,15 +2,19 @@
 title: "Data Exploration"
 author: "Su Goh"
 date: "12/12/2020"
-output: pdf_document
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: true
+    toc_depth: 2
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Packages and data
-```{r}
+```{r include=FALSE}
 library(sf)
 library(dplyr)
 library(ggplot2)
@@ -26,7 +30,7 @@ to_data <- df[df$region_name == "Toronto",]
 ```
 
 ## Data Descriptives: DV
-```{r}
+```{r desc1, echo=FALSE}
 summary(df$lfp_female)
 hist(df$lfp_female, breaks=20, main="Female LFP in Canada", xlab='Female LFP %')
 abline(v=mean(df$lfp_female), col='red')
@@ -36,20 +40,17 @@ plot(to_data['lfp_female'], breaks='quantile', main="Female LFP in Toronto")
 
 
 ## Data Descriptives: IV
-```{r}
+```{r desc2, echo=FALSE}
 iv_colnames <- c("pca1_stock", "avg_hh_size", "med_hh_income_1000", "avg_rooms_per_dwelling", "percent_hh_with_children", "lfp_male", "percent_drivers_female", "percent_publictransit_female")
-df %>% summarise_at(iv_colnames, mean)
+df_no_geom %>% summarise_at(iv_colnames, mean)
 plot(mtl_data['pca1_stock'], breaks='quantile', main="SNDI in Montreal")
 plot(to_data['pca1_stock'], breaks='quantile', main="SNDI in Toronto")
-plot(mtl_data['percent_hh_with_children'], breaks='quantile', main="%Households with children in Montreal")
-plot(to_data['percent_hh_with_children'], breaks='quantile', main="%Households with children in Toronto")
 ```
-
 
 
 ## Study 1: Gender differences in spatial behaviour
 ### Commuting Modes
-```{r}
+```{r commute_modes, echo=FALSE }
 commute_modes_female <- data.frame(driver=df$commute_driver_female, passenger=df$commute_passenger_female, transit=df$commute_publictransit_female, walk=df$commute_walk_female) 
 commute_modes_female$gender <- 'F'
 commute_modes_male <- data.frame(driver=df$commute_driver_male, passenger=df$commute_passenger_male, transit=df$commute_publictransit_male, walk=df$commute_walk_male) 
@@ -59,19 +60,21 @@ ggplot(melt(commute_modes, id.vars='gender'), aes(x=value, y=variable, fill=gend
 ```
 
 \[H_0: \text{driver}_{F} \geq \text{driver}_M \\ H_1: \text{driver}_{F} \lt \text{driver}_M\]
+
 ```{r}
 t.test(commute_modes_female$driver, commute_modes_male$driver, alternative='less', var.equal=TRUE, paired=TRUE)
 ```
 
 
 \[H_0: \text{transit}_{F} \leq \text{transit}_M \\ H_1: \text{transit}_{F} \gt \text{transit}_M\]
+
 ```{r}
 t.test(commute_modes_female$transit, commute_modes_male$transit, alternative='greater', var.equal=TRUE, paired=TRUE)
 ```
 
 
 ### Commuting Durations
-```{r}
+```{r commute_time, echo=FALSE }
 commute_time_female <- data.frame(t15=df$commute_time_lt15_female, t15to29=df$commute_time_15to29_female, t30to44=df$commute_time_30to44_female, t45to59=df$commute_time_45to59_female, t60=df$commute_time_gt60_female) 
 commute_time_female$gender <- 'F'
 commute_time_male <- data.frame(t15=df$commute_time_lt15_male, t15to29=df$commute_time_15to29_male, t30to44=df$commute_time_30to44_male, t45to59=df$commute_time_45to59_male, t60=df$commute_time_gt60_male) 
@@ -81,7 +84,7 @@ ggplot(melt(commute_times, id.vars='gender'), aes(x=value, y=variable, fill=gend
 ```
 
 T-tests: all stat sig that male and female are diff
-```{r}
+```{r commute_t}
 t.test(commute_time_female$t15, commute_time_male$t15, var.equal=TRUE, paired=TRUE)
 t.test(commute_time_female$t15to29, commute_time_male$t15to29, var.equal=TRUE, paired=TRUE)
 t.test(commute_time_female$t30to44, commute_time_male$t30to44, var.equal=TRUE, paired=TRUE)
@@ -90,85 +93,42 @@ t.test(commute_time_female$t60, commute_time_male$t60, var.equal=TRUE, paired=TR
 ```
 
 
-## Study 2: LFP ~ SNDI
-```{r}
-model_general <- lm(lfp_female ~ pca1_stock, data=df)
-summary(model_general)
-plot(df$lfp_female ~ df$pca1_stock)
-abline(model_general)
-plot(model_general$residuals)
-```
-Statistically significant at 5% but the plot shows us that it's not a very linear relationship... Residuals seem to be about 0 so we're just going to pretend that it is linear.
+## Study 2: determinants of LFP
+```{r lfp_all}
+df_vars <- df_no_geom[iv_colnames]
+df_vars$lfp_female <- df_no_geom$lfp_female
+model_all <- lm(lfp_female ~ ., data=df_vars)
+summary(model_all)
+plot(model_all$residuals, main='LFP ~ . : residuals', ylab='residual')
 
-## Descriptives
-
-```{r}
-hist(df$pca1_stock)
+model_no_sndi <- lm(lfp_female ~ . -pca1_stock, data=df_vars)
+anova(model_no_sndi, model_all)
 ```
 
-## Montreal
-```{r}
-mtl_data <- df[df$region_name == "Montréal",]
-model_mtl <- lm(lfp_female ~ pca1_stock, data=mtl_data)
-plot(mtl_data$lfp_female ~ mtl_data$pca1_stock, main="Montreal", xlab="SNDi", ylab="Female LFP")
-abline(model_mtl)
+### LFP ~ SNDI^2
+```{r lfp_quad}
+quadratic_model <- lm(lfp_female ~ poly(pca1_stock, 2), data=df_vars)
+summary(quadratic_model)
+ggplot(df_vars, aes(x=pca1_stock, y=lfp_female)) + geom_point() + stat_smooth(se=F, method='lm', formula=y~poly(x,2)) + labs(title='LFP ~ SNDI + SNDI^2', y='Female LFP (%)', x='SNDI')
+```
+
+### Montreal
+```{r lfp_mtl, echo=FALSE }
+mtl_data_reg <- mtl_data[iv_colnames]
+mtl_data_reg <- st_set_geometry(mtl_data_reg, NULL) 
+mtl_data_reg$lfp_female <- mtl_data$lfp_female
+model_mtl <- lm(lfp_female ~ ., data=mtl_data_reg)
 summary(model_mtl)
+ggplot(mtl_data, aes(x=pca1_stock, y=lfp_female)) + geom_point() + stat_smooth(se=F, method='lm', formula=y~x) + labs(title='Montreal: LFP ~ SNDI', y='Female LFP (%)', x='SNDI')
 ```
-SNDI has a pretty strong effect on female LFP. 
 
-## Toronto
-```{r}
-to_data <- df[df$region_name == "Toronto",]
-model_to <- lm(lfp_female ~ pca1_stock, data=to_data)
-plot(to_data$lfp_female ~ to_data$pca1_stock, main="Toronto", xlab="SNDi", ylab="Female LFP")
-abline(model_to)
+### Toronto
+```{r lfp_to, echo=FALSE }
+to_data_reg <- to_data[iv_colnames]
+to_data_reg <- st_set_geometry(to_data_reg, NULL) 
+to_data_reg$lfp_female <- to_data$lfp_female
+model_to <- lm(lfp_female ~ ., data=to_data_reg)
 summary(model_to)
-```
-
-## Vancouver
-```{r}
-van_data <- df[df$region_name == "Vancouver",]
-model_van <- lm(lfp_female ~ pca1_stock, data=van_data)
-plot(van_data$lfp_female ~ van_data$pca1_stock, main="Vancouver", xlab="SNDi", ylab="Female LFP")
-abline(model_van)
-summary(model_van)
-```
-Even stronger effect on LFP than in Montreal and Toronto!
-
-## Commuting behaviour
-### Mode
-```{r, echo=FALSE, fig.height = 5, fig.width = 6, fig.align = "center"}
-
-```
-do t test?
-
-### Duration
-```{r, echo=FALSE, fig.height = 5, fig.width = 6, fig.align = "center"}
-
-```
-
-## Big model
-```{r}
-model_multi <- lm(df$lfp_female ~ df$avg_hh_size 
-                  + df$hh_with_children_single_parents 
-                  + df$hh_with_children_couples
-                  + df$med_hh_income_thousands
-                  + df$avg_rooms_per_dwelling
-                  + df$commute_car_female 
-                  + df$commute_publictransit_female
-                  + df$commute_time_lt15_female
-                  + df$commute_time_15to29_female
-                  + df$commute_time_30to44_female
-                  + df$commute_time_45to59_female
-                  + df$commute_time_gt60_female
-                  + df$pca1_stock)
-summary(model_multi)
-```
-
-Hmmm...... all stat sig?? something's not right
-
-## LFP male vs female
-```{r}
-boxplot(df$lfp_male, df$lfp_female, names=c("Male", "Female"))
+ggplot(model_to, aes(x=pca1_stock, y=lfp_female)) + geom_point() + stat_smooth(se=F, method='lm', formula=y~x) + labs(title='Toronto: LFP ~ SNDI', y='Female LFP (%)', x='SNDI')
 ```
 
