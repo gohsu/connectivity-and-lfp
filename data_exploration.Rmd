@@ -7,7 +7,7 @@ output:
     df_print: paged
     toc: true
     toc_float: true
-    toc_depth: 2
+    toc_depth: 3
 ---
 
 ```{r setup, include=FALSE}
@@ -30,21 +30,23 @@ to_data <- df[df$region_name == "Toronto",]
 ```
 
 ## Data Descriptives: DV
-```{r desc1, echo=FALSE}
+```{r desc1}
 summary(df$lfp_female)
 hist(df$lfp_female, breaks=20, main="Female LFP in Canada", xlab='Female LFP %')
 abline(v=mean(df$lfp_female), col='red')
-plot(mtl_data['lfp_female'], breaks='quantile', main="Female LFP in Montreal")
-plot(to_data['lfp_female'], breaks='quantile', main="Female LFP in Toronto")
+
+random_regs <- sample(unique(df[df$population > 16000, ]$region_name), size=6)
+for (region in random_regs){
+  region_data <- df[df$region_name == region,]
+  plot(region_data['lfp_female'], main=region)
+}
 ```
 
 
 ## Data Descriptives: IV
 ```{r desc2, echo=FALSE}
 iv_colnames <- c("pca1_stock", "avg_hh_size", "med_hh_income_1000", "avg_rooms_per_dwelling", "percent_hh_with_children", "lfp_male", "percent_drivers_female", "percent_publictransit_female")
-df_no_geom %>% summarise_at(iv_colnames, mean)
-plot(mtl_data['pca1_stock'], breaks='quantile', main="SNDI in Montreal")
-plot(to_data['pca1_stock'], breaks='quantile', main="SNDI in Toronto")
+df_no_geom %>% summarise_at(iv_colnames, mean) %>% t
 ```
 
 
@@ -59,18 +61,19 @@ commute_modes <- rbind(commute_modes_female, commute_modes_male)
 ggplot(melt(commute_modes, id.vars='gender'), aes(x=value, y=variable, fill=gender)) + geom_boxplot() + facet_wrap(~variable, scale="free") + coord_flip() + labs(title='Commuting Modes', x=NULL, y=NULL, fill='Gender')
 ```
 
-\[H_0: \text{driver}_{F} \geq \text{driver}_M \\ H_1: \text{driver}_{F} \lt \text{driver}_M\]
+\[H_0: \text{driver}_{F} \geq \text{driver}_M \\ H_1: \text{driver}_{F} \lt \text{driver}_M\] 
 
 ```{r}
 t.test(commute_modes_female$driver, commute_modes_male$driver, alternative='less', var.equal=TRUE, paired=TRUE)
 ```
-
+Reject null hypothesis; less women commute as drivers than men. 
 
 \[H_0: \text{transit}_{F} \leq \text{transit}_M \\ H_1: \text{transit}_{F} \gt \text{transit}_M\]
 
 ```{r}
 t.test(commute_modes_female$transit, commute_modes_male$transit, alternative='greater', var.equal=TRUE, paired=TRUE)
 ```
+Reject null hypothesis; more women commute by public transit than men. 
 
 
 ### Commuting Durations
@@ -114,9 +117,12 @@ ggplot(df_vars, aes(x=pca1_stock, y=lfp_female)) + geom_point() + stat_smooth(se
 
 ### Montreal
 ```{r lfp_mtl, echo=FALSE }
+plot(mtl_data['lfp_female'], breaks='quantile', main="Female LFP in Montreal")
+plot(mtl_data['pca1_stock'], breaks='quantile', main="SNDI in Montreal")
 mtl_data_reg <- mtl_data[iv_colnames]
 mtl_data_reg <- st_set_geometry(mtl_data_reg, NULL) 
 mtl_data_reg$lfp_female <- mtl_data$lfp_female
+summary(mtl_data_reg$lfp_female)
 model_mtl <- lm(lfp_female ~ ., data=mtl_data_reg)
 summary(model_mtl)
 ggplot(mtl_data, aes(x=pca1_stock, y=lfp_female)) + geom_point() + stat_smooth(se=F, method='lm', formula=y~x) + labs(title='Montreal: LFP ~ SNDI', y='Female LFP (%)', x='SNDI')
@@ -124,9 +130,12 @@ ggplot(mtl_data, aes(x=pca1_stock, y=lfp_female)) + geom_point() + stat_smooth(s
 
 ### Toronto
 ```{r lfp_to, echo=FALSE }
+plot(to_data['lfp_female'], breaks='quantile', main="Female LFP in Toronto")
+plot(to_data['pca1_stock'], breaks='quantile', main="SNDI in Toronto")
 to_data_reg <- to_data[iv_colnames]
 to_data_reg <- st_set_geometry(to_data_reg, NULL) 
 to_data_reg$lfp_female <- to_data$lfp_female
+summary(to_data_reg$lfp_female)
 model_to <- lm(lfp_female ~ ., data=to_data_reg)
 summary(model_to)
 ggplot(model_to, aes(x=pca1_stock, y=lfp_female)) + geom_point() + stat_smooth(se=F, method='lm', formula=y~x) + labs(title='Toronto: LFP ~ SNDI', y='Female LFP (%)', x='SNDI')
