@@ -9,9 +9,89 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Load data and do simple linear regression
+## Packages and data
 ```{r}
-df <- read.csv('data/CA16_CTs_all.csv')
+library(sf)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+df <- st_read('data/CA16_CTs_all.gpkg')
+df$percent_hh_with_children <- df$hh_with_children / df$hh_total
+df$percent_drivers_female <- df$commute_driver_female / (df$commute_driver_male + df$commute_driver_female)
+df$percent_publictransit_female <- df$commute_publictransit_female / (df$commute_publictransit_male + df$commute_publictransit_female)
+df <- na.omit(df)
+df_no_geom <- st_set_geometry(df, NULL) 
+mtl_data <- df[df$region_name == "Montréal",]
+to_data <- df[df$region_name == "Toronto",]
+```
+
+## Data Descriptives: DV
+```{r}
+summary(df$lfp_female)
+hist(df$lfp_female, breaks=20, main="Female LFP in Canada", xlab='Female LFP %')
+abline(v=mean(df$lfp_female), col='red')
+plot(mtl_data['lfp_female'], breaks='quantile', main="Female LFP in Montreal")
+plot(to_data['lfp_female'], breaks='quantile', main="Female LFP in Toronto")
+```
+
+
+## Data Descriptives: IV
+```{r}
+iv_colnames <- c("pca1_stock", "avg_hh_size", "med_hh_income_1000", "avg_rooms_per_dwelling", "percent_hh_with_children", "lfp_male", "percent_drivers_female", "percent_publictransit_female")
+df %>% summarise_at(iv_colnames, mean)
+plot(mtl_data['pca1_stock'], breaks='quantile', main="SNDI in Montreal")
+plot(to_data['pca1_stock'], breaks='quantile', main="SNDI in Toronto")
+plot(mtl_data['percent_hh_with_children'], breaks='quantile', main="%Households with children in Montreal")
+plot(to_data['percent_hh_with_children'], breaks='quantile', main="%Households with children in Toronto")
+```
+
+
+
+## Study 1: Gender differences in spatial behaviour
+### Commuting Modes
+```{r}
+commute_modes_female <- data.frame(driver=df$commute_driver_female, passenger=df$commute_passenger_female, transit=df$commute_publictransit_female, walk=df$commute_walk_female) 
+commute_modes_female$gender <- 'F'
+commute_modes_male <- data.frame(driver=df$commute_driver_male, passenger=df$commute_passenger_male, transit=df$commute_publictransit_male, walk=df$commute_walk_male) 
+commute_modes_male$gender <- 'M'
+commute_modes <- rbind(commute_modes_female, commute_modes_male)
+ggplot(melt(commute_modes, id.vars='gender'), aes(x=value, y=variable, fill=gender)) + geom_boxplot() + facet_wrap(~variable, scale="free") + coord_flip() + labs(title='Commuting Modes', x=NULL, y=NULL, fill='Gender')
+```
+
+\[H_0: \text{driver}_{F} \geq \text{driver}_M \\ H_1: \text{driver}_{F} \lt \text{driver}_M\]
+```{r}
+t.test(commute_modes_female$driver, commute_modes_male$driver, alternative='less', var.equal=TRUE, paired=TRUE)
+```
+
+
+\[H_0: \text{transit}_{F} \leq \text{transit}_M \\ H_1: \text{transit}_{F} \gt \text{transit}_M\]
+```{r}
+t.test(commute_modes_female$transit, commute_modes_male$transit, alternative='greater', var.equal=TRUE, paired=TRUE)
+```
+
+
+### Commuting Durations
+```{r}
+commute_time_female <- data.frame(t15=df$commute_time_lt15_female, t15to29=df$commute_time_15to29_female, t30to44=df$commute_time_30to44_female, t45to59=df$commute_time_45to59_female, t60=df$commute_time_gt60_female) 
+commute_time_female$gender <- 'F'
+commute_time_male <- data.frame(t15=df$commute_time_lt15_male, t15to29=df$commute_time_15to29_male, t30to44=df$commute_time_30to44_male, t45to59=df$commute_time_45to59_male, t60=df$commute_time_gt60_male) 
+commute_time_male$gender <- 'M'
+commute_times <- rbind(commute_time_female, commute_time_male)
+ggplot(melt(commute_times, id.vars='gender'), aes(x=value, y=variable, fill=gender)) + geom_boxplot() + facet_wrap(~variable, scale="free") + coord_flip() + labs(title='Commuting Duration', x=NULL, y=NULL, fill='Gender')
+```
+
+T-tests: all stat sig that male and female are diff
+```{r}
+t.test(commute_time_female$t15, commute_time_male$t15, var.equal=TRUE, paired=TRUE)
+t.test(commute_time_female$t15to29, commute_time_male$t15to29, var.equal=TRUE, paired=TRUE)
+t.test(commute_time_female$t30to44, commute_time_male$t30to44, var.equal=TRUE, paired=TRUE)
+t.test(commute_time_female$t45to59, commute_time_male$t45to59, var.equal=TRUE, paired=TRUE)
+t.test(commute_time_female$t60, commute_time_male$t60, var.equal=TRUE, paired=TRUE)
+```
+
+
+## Study 2: LFP ~ SNDI
+```{r}
 model_general <- lm(lfp_female ~ pca1_stock, data=df)
 summary(model_general)
 plot(df$lfp_female ~ df$pca1_stock)
@@ -19,6 +99,12 @@ abline(model_general)
 plot(model_general$residuals)
 ```
 Statistically significant at 5% but the plot shows us that it's not a very linear relationship... Residuals seem to be about 0 so we're just going to pretend that it is linear.
+
+## Descriptives
+
+```{r}
+hist(df$pca1_stock)
+```
 
 ## Montreal
 ```{r}
@@ -52,18 +138,13 @@ Even stronger effect on LFP than in Montreal and Toronto!
 ## Commuting behaviour
 ### Mode
 ```{r, echo=FALSE, fig.height = 5, fig.width = 6, fig.align = "center"}
-boxplot(df$commute_car_male, df$commute_car_female, main="Car", names=c("Male", "Female"))
-boxplot(df$commute_publictransit_male, df$commute_publictransit_female, main="Public Transit", names=c("Male", "Female"))
+
 ```
 do t test?
 
 ### Duration
 ```{r, echo=FALSE, fig.height = 5, fig.width = 6, fig.align = "center"}
-boxplot(df$commute_time_lt15_male, df$commute_time_lt15_female, main="< 15 minutes", names=c("Male", "Female"))
-boxplot(df$commute_time_15to29_male, df$commute_time_15to29_female, main = "15 - 29 minutes", names=c("Male", "Female"))
-boxplot(df$commute_time_30to44_male, df$commute_time_30to44_female, main = "30 - 44 minutes", names=c("Male", "Female"))
-boxplot(df$commute_time_45to59_male, df$commute_time_45to59_female, main = "45 - 59 minutes", names=c("Male", "Female"))
-boxplot(df$commute_time_gt60_male, df$commute_time_gt60_female, main = "> 60 minutes", names=c("Male", "Female"))
+
 ```
 
 ## Big model
@@ -85,3 +166,9 @@ summary(model_multi)
 ```
 
 Hmmm...... all stat sig?? something's not right
+
+## LFP male vs female
+```{r}
+boxplot(df$lfp_male, df$lfp_female, names=c("Male", "Female"))
+```
+
