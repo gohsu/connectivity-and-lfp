@@ -12,46 +12,51 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(sf)
+library(tidyverse)
+library(ggplot2)
+library(reshape2)
+library(lme4)
+library(lmtest)
+library(lmerTest)
 ```
 
 ```{r include=FALSE}
-library(sf)
-library(dplyr)
-library(ggplot2)
-library(reshape2)
 df <- st_read('data/CA16_CTs_all.gpkg')
-df$percent_hh_with_children <- df$hh_with_children / df$hh_total
-df$percent_drivers_female <- df$commute_driver_female / (df$commute_driver_male + df$commute_driver_female)
-df$percent_publictransit_female <- df$commute_publictransit_female / (df$commute_publictransit_male + df$commute_publictransit_female)
+df$percent_hh_with_children <- 100 * df$hh_with_children / df$hh_total
+df$percent_drivers_female <- 100 * df$commute_driver_female / (df$commute_driver_male + df$commute_driver_female)
+df$percent_publictransit_female <- 100 * df$commute_publictransit_female / (df$commute_publictransit_male + df$commute_publictransit_female)
+df$lfp_gap <- df$lfp_male - df$lfp_female
 df <- na.omit(df)
-df_no_geom <- st_set_geometry(df, NULL) 
-mtl_data <- df[df$region_name == "Montréal",]
-to_data <- df[df$region_name == "Toronto",]
+df_no_geom <- st_drop_geometry(df)
+mtl_data <- filter(df, csd_uid == '2466023')
+to_data <- filter(df, csd_uid == '3520005')
 ```
 
 ## Data Descriptives: DV
 ```{r desc1}
-summary(df$lfp_female)
-hist(df$lfp_female, breaks=20, main="Female LFP in Canada", xlab='Female LFP %')
-abline(v=mean(df$lfp_female), col='red')
-
-random_regs <- sample(unique(df[df$population > 16000, ]$region_name), size=6)
-for (region in random_regs){
-  region_data <- df[df$region_name == region,]
-  plot(region_data['lfp_female'], main=region)
-}
+lfp <- rbind(data.frame(lfp = df$lfp_female, gender ='F'), data.frame(lfp = df$lfp_male, gender ='M'))
+avg_lfp <- mean(df$lfp_female)
+avg_lfp_m <- mean(df$lfp_male)
+ggplot(lfp, aes(x=lfp, fill=gender)) + geom_histogram(alpha=0.5, position="identity") + geom_vline(xintercept=avg_lfp_m) + geom_vline(xintercept=avg_lfp)+  scale_x_continuous(breaks=seq(0,100,10)) + labs(title='LFP by gender in Canada  by census tract', x='LFP (%)') 
+avg_gap <- mean(df$lfp_gap)
+ggplot(df_no_geom, aes(lfp_gap)) + geom_histogram(color="black", fill="white", binwidth = 2) + geom_vline(xintercept = avg_gap, color='red') + labs(title='LFP Gap (M-F) in Canada by census tract', x='percentage points')
 ```
 
 
 ## Data Descriptives: IV
 ```{r desc2, echo=FALSE}
-iv_colnames <- c("pca1_stock", "avg_hh_size", "med_hh_income_1000", "avg_rooms_per_dwelling", "percent_hh_with_children", "lfp_male", "percent_drivers_female", "percent_publictransit_female")
-df_no_geom %>% summarise_at(iv_colnames, mean) %>% t
+iv_colnames <- c("pca1_stock", "med_hh_income_1000", "avg_rooms_per_dwelling", "percent_hh_with_children", "lfp_male", "percent_drivers_female", "percent_publictransit_female")
+csd <- aggregate(df_no_geom$pca1_stock, by=list(df$csd_uid), mean)
+colnames(csd) <- c('csd_uid', 'pca1_stock')
+avg_sndi <- mean(csd$pca1_stock)
+ggplot(csd, aes(pca1_stock)) + geom_histogram(color="black", fill="white") + geom_vline(xintercept=avg_sndi, color='red') + labs(title='Street network disconnectedness in Canada by municipality', x='SNDI') 
 ```
 
 
 ## Study 1: Gender differences in spatial behaviour
 ### Commuting Modes
+
 ```{r commute_modes, echo=FALSE }
 commute_modes_female <- data.frame(driver=df$commute_driver_female, passenger=df$commute_passenger_female, transit=df$commute_publictransit_female, walk=df$commute_walk_female) 
 commute_modes_female$gender <- 'F'
@@ -102,42 +107,65 @@ df_vars <- df_no_geom[iv_colnames]
 df_vars$lfp_female <- df_no_geom$lfp_female
 model_all <- lm(lfp_female ~ ., data=df_vars)
 summary(model_all)
-plot(model_all$residuals, main='LFP ~ . : residuals', ylab='residual')
-
+plot(residuals(model_all), ylab='residuals')
+plot(residuals(model_all) ~ df_vars$lfp_female, ylab='residuals', xlab='fitted value')
+qqnorm(residuals(model_all), main='Residual QQ Plot (normal dist)')
+qqline(residuals(model_all))
+bptest(model_all)  # heteroskedasticity
 model_no_sndi <- lm(lfp_female ~ . -pca1_stock, data=df_vars)
 anova(model_no_sndi, model_all)
 ```
 
-### LFP ~ SNDI^2
-```{r lfp_quad}
-quadratic_model <- lm(lfp_female ~ poly(pca1_stock, 2), data=df_vars)
-summary(quadratic_model)
-ggplot(df_vars, aes(x=pca1_stock, y=lfp_female)) + geom_point() + stat_smooth(se=F, method='lm', formula=y~poly(x,2)) + labs(title='LFP ~ SNDI + SNDI^2', y='Female LFP (%)', x='SNDI')
+### Multilevel model
+```{r lfp_multilevel}
+df_vars$cma_uid <- df$cma_uid
+model_cma <- lmer(lfp_female ~ pca1_stock + med_hh_income_1000 + avg_rooms_per_dwelling + percent_hh_with_children + percent_drivers_female + percent_publictransit_female + (1 | cma_uid), data=df_vars)
+summary(model_cma)
+plot(residuals(model_cma), ylab='residuals')
+plot(residuals(model_cma) ~ df_vars$lfp_female, ylab='residuals', xlab='fitted value')
+qqnorm(residuals(model_cma), main='Residual QQ Plot (normal dist)')
+qqline(residuals(model_cma))
+```
+
+### Gender Difference in LFP
+```{r lfp_diff}
+df_vars$lfp_gap <- df_vars$lfp_male - df_vars$lfp_female
+model_gap <- lm(lfp_gap ~ . -lfp_female -lfp_male -cma_uid, data=df_vars)
+summary(model_gap)
+plot(residuals(model_gap), ylab='residuals')
+plot(residuals(model_gap) ~ df_vars$lfp_female, ylab='residuals', xlab='fitted value')
+qqnorm(residuals(model_gap), main='Residual QQ Plot (normal dist)')
+qqline(residuals(model_gap))
 ```
 
 ### Montreal
 ```{r lfp_mtl, echo=FALSE }
-plot(mtl_data['lfp_female'], breaks='quantile', main="Female LFP in Montreal")
+plot(mtl_data['lfp_gap'], breaks='quantile', main="LFP Gap in Montreal")
 plot(mtl_data['pca1_stock'], breaks='quantile', main="SNDI in Montreal")
 mtl_data_reg <- mtl_data[iv_colnames]
 mtl_data_reg <- st_set_geometry(mtl_data_reg, NULL) 
-mtl_data_reg$lfp_female <- mtl_data$lfp_female
-summary(mtl_data_reg$lfp_female)
-model_mtl <- lm(lfp_female ~ ., data=mtl_data_reg)
+mtl_data_reg$lfp_gap <- mtl_data$lfp_gap
+model_mtl <- lm(lfp_gap ~ . -lfp_male, data=mtl_data_reg)
 summary(model_mtl)
-ggplot(mtl_data, aes(x=pca1_stock, y=lfp_female)) + geom_point() + stat_smooth(se=F, method='lm', formula=y~x) + labs(title='Montreal: LFP ~ SNDI', y='Female LFP (%)', x='SNDI')
+plot(residuals(model_mtl), ylab='residuals')
+plot(residuals(model_mtl) ~ mtl_data_reg$lfp_gap, ylab='residuals', xlab='fitted value')
+qqnorm(residuals(model_mtl), main='Residual QQ Plot (normal dist)')
+qqline(residuals(model_mtl))
+bptest(model_mtl)  # heteroskedasticity
+
+mtl_data$residuals <- model_mtl$residuals
+ggplot(mtl_data) + geom_sf(aes(fill = residuals), colour = "transparent") +   scale_fill_viridis_c(limits = c(-15, 20)) 
 ```
 
-### Toronto
+### Toronto CSD
 ```{r lfp_to, echo=FALSE }
-plot(to_data['lfp_female'], breaks='quantile', main="Female LFP in Toronto")
+plot(to_data['lfp_gap'], breaks='quantile', main="LFP Gap in Toronto")
 plot(to_data['pca1_stock'], breaks='quantile', main="SNDI in Toronto")
 to_data_reg <- to_data[iv_colnames]
 to_data_reg <- st_set_geometry(to_data_reg, NULL) 
-to_data_reg$lfp_female <- to_data$lfp_female
-summary(to_data_reg$lfp_female)
-model_to <- lm(lfp_female ~ ., data=to_data_reg)
+to_data_reg$lfp_gap <- to_data$lfp_gap
+model_to <- lm(lfp_gap ~ . -lfp_male, data=to_data_reg)
 summary(model_to)
-ggplot(model_to, aes(x=pca1_stock, y=lfp_female)) + geom_point() + stat_smooth(se=F, method='lm', formula=y~x) + labs(title='Toronto: LFP ~ SNDI', y='Female LFP (%)', x='SNDI')
+to_data$residuals <- model_to$residuals
+ggplot(to_data) + geom_sf(aes(fill = residuals), colour = "transparent") +   scale_fill_viridis_c(limits = c(-15, 20)) 
 ```
-
