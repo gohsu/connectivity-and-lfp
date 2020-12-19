@@ -38,19 +38,19 @@ to_data <- filter(df, csd_uid == '3520005')
 lfp <- rbind(data.frame(lfp = df$lfp_female, gender ='F'), data.frame(lfp = df$lfp_male, gender ='M'))
 avg_lfp <- mean(df$lfp_female)
 avg_lfp_m <- mean(df$lfp_male)
-ggplot(lfp, aes(x=lfp, fill=gender)) + geom_histogram(alpha=0.5, position="identity") + geom_vline(xintercept=avg_lfp_m) + geom_vline(xintercept=avg_lfp)+  scale_x_continuous(breaks=seq(0,100,10)) + labs(title='LFP by gender in Canada  by census tract', x='LFP (%)') 
+ggplot(lfp, aes(x=lfp, fill=gender)) + geom_histogram(alpha=0.5, position="identity") + geom_vline(xintercept=avg_lfp_m) + geom_vline(xintercept=avg_lfp)+  scale_x_continuous(breaks=seq(0,100,10)) + labs(x='LFP (%)') 
 avg_gap <- mean(df$lfp_gap)
-ggplot(df_no_geom, aes(lfp_gap)) + geom_histogram(color="black", fill="white", binwidth = 2) + geom_vline(xintercept = avg_gap, color='red') + labs(title='LFP Gap (M-F) in Canada by census tract', x='percentage points')
+ggplot(df_no_geom, aes(lfp_gap)) + geom_histogram(color="black", fill="white", binwidth = 2) + geom_vline(xintercept = avg_gap, color='red') + labs(x='percentage points')
 ```
 
 
 ## Data Descriptives: IV
 ```{r desc2, echo=FALSE}
-iv_colnames <- c("pca1_stock", "med_hh_income_1000", "avg_rooms_per_dwelling", "percent_hh_with_children", "lfp_male", "percent_drivers_female", "percent_publictransit_female")
-csd <- aggregate(df_no_geom$pca1_stock, by=list(df$csd_uid), mean)
-colnames(csd) <- c('csd_uid', 'pca1_stock')
-avg_sndi <- mean(csd$pca1_stock)
-ggplot(csd, aes(pca1_stock)) + geom_histogram(color="black", fill="white") + geom_vline(xintercept=avg_sndi, color='red') + labs(title='Street network disconnectedness in Canada by municipality', x='SNDI') 
+iv_colnames <- c("pca1_stock", "med_hh_income_1000", "avg_rooms_per_dwelling", "percent_hh_with_children", "percent_drivers_female", "percent_publictransit_female")
+avg_sndi <- mean(df$pca1_stock)
+ggplot(csd, aes(pca1_stock)) + geom_histogram(color="black", fill="white") + geom_vline(xintercept=avg_sndi, color='red') + labs(title='Street network disconnectedness in Canada by census tract', x='SNDI') 
+
+st_drop_geometry(df[iv_colnames]) %>% summarise_all(mean) %>% t()
 ```
 
 
@@ -59,11 +59,11 @@ ggplot(csd, aes(pca1_stock)) + geom_histogram(color="black", fill="white") + geo
 
 ```{r commute_modes, echo=FALSE }
 commute_modes_female <- data.frame(driver=df$commute_driver_female, passenger=df$commute_passenger_female, transit=df$commute_publictransit_female, walk=df$commute_walk_female) 
-commute_modes_female$gender <- 'F'
+commute_modes_female$gender <- 'Female'
 commute_modes_male <- data.frame(driver=df$commute_driver_male, passenger=df$commute_passenger_male, transit=df$commute_publictransit_male, walk=df$commute_walk_male) 
-commute_modes_male$gender <- 'M'
+commute_modes_male$gender <- 'Male'
 commute_modes <- rbind(commute_modes_female, commute_modes_male)
-ggplot(melt(commute_modes, id.vars='gender'), aes(x=value, y=variable, fill=gender)) + geom_boxplot() + facet_wrap(~variable, scale="free") + coord_flip() + labs(title='Commuting Modes', x=NULL, y=NULL, fill='Gender')
+ggplot(melt(commute_modes, id.vars='gender'), aes(x=value, y=variable, fill=gender)) + geom_boxplot() + facet_wrap(~variable, scale="free") + coord_flip() + labs(x=NULL, y=NULL, fill='Gender')
 ```
 
 \[H_0: \text{driver}_{F} \geq \text{driver}_M \\ H_1: \text{driver}_{F} \lt \text{driver}_M\] 
@@ -84,11 +84,11 @@ Reject null hypothesis; more women commute by public transit than men.
 ### Commuting Durations
 ```{r commute_time, echo=FALSE }
 commute_time_female <- data.frame(t15=df$commute_time_lt15_female, t15to29=df$commute_time_15to29_female, t30to44=df$commute_time_30to44_female, t45to59=df$commute_time_45to59_female, t60=df$commute_time_gt60_female) 
-commute_time_female$gender <- 'F'
+commute_time_female$gender <- 'Female'
 commute_time_male <- data.frame(t15=df$commute_time_lt15_male, t15to29=df$commute_time_15to29_male, t30to44=df$commute_time_30to44_male, t45to59=df$commute_time_45to59_male, t60=df$commute_time_gt60_male) 
-commute_time_male$gender <- 'M'
+commute_time_male$gender <- 'Male'
 commute_times <- rbind(commute_time_female, commute_time_male)
-ggplot(melt(commute_times, id.vars='gender'), aes(x=value, y=variable, fill=gender)) + geom_boxplot() + facet_wrap(~variable, scale="free") + coord_flip() + labs(title='Commuting Duration', x=NULL, y=NULL, fill='Gender')
+ggplot(melt(commute_times, id.vars='gender'), aes(x=value, y=variable, fill=gender)) + geom_boxplot() + facet_wrap(~variable, scale="free") + coord_flip() + labs(x=NULL, y=NULL, fill='Gender')
 ```
 
 T-tests: all stat sig that male and female are diff
@@ -140,8 +140,8 @@ qqline(residuals(model_gap))
 
 ### Montreal
 ```{r lfp_mtl, echo=FALSE }
-plot(mtl_data['lfp_gap'], breaks='quantile', main="LFP Gap in Montreal")
-plot(mtl_data['pca1_stock'], breaks='quantile', main="SNDI in Montreal")
+plot(mtl_data['lfp_gap'], breaks='quantile')
+plot(mtl_data['pca1_stock'], breaks='quantile')
 mtl_data_reg <- mtl_data[iv_colnames]
 mtl_data_reg <- st_set_geometry(mtl_data_reg, NULL) 
 mtl_data_reg$lfp_gap <- mtl_data$lfp_gap
@@ -159,8 +159,8 @@ ggplot(mtl_data) + geom_sf(aes(fill = residuals), colour = "transparent") +   sc
 
 ### Toronto CSD
 ```{r lfp_to, echo=FALSE }
-plot(to_data['lfp_gap'], breaks='quantile', main="LFP Gap in Toronto")
-plot(to_data['pca1_stock'], breaks='quantile', main="SNDI in Toronto")
+plot(to_data['lfp_gap'], breaks='quantile')
+plot(to_data['pca1_stock'], breaks='quantile')
 to_data_reg <- to_data[iv_colnames]
 to_data_reg <- st_set_geometry(to_data_reg, NULL) 
 to_data_reg$lfp_gap <- to_data$lfp_gap
