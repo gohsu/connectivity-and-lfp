@@ -48,8 +48,7 @@ ggplot(df_no_geom, aes(lfp_gap)) + geom_histogram(color="black", fill="white", b
 ```{r desc2, echo=FALSE}
 iv_colnames <- c("pca1_stock", "med_hh_income_1000", "avg_rooms_per_dwelling", "percent_hh_with_children", "percent_drivers_female", "percent_publictransit_female")
 avg_sndi <- mean(df$pca1_stock)
-ggplot(csd, aes(pca1_stock)) + geom_histogram(color="black", fill="white") + geom_vline(xintercept=avg_sndi, color='red') + labs(title='Street network disconnectedness in Canada by census tract', x='SNDI') 
-
+ggplot(df, aes(pca1_stock)) + geom_histogram(color="black", fill="white") + geom_vline(xintercept=avg_sndi, color='red') + labs(x='SNDI') 
 st_drop_geometry(df[iv_colnames]) %>% summarise_all(mean) %>% t()
 ```
 
@@ -105,7 +104,7 @@ t.test(commute_time_female$t60, commute_time_male$t60, var.equal=TRUE, paired=TR
 ```{r lfp_all}
 df_vars <- df_no_geom[iv_colnames]
 df_vars$lfp_female <- df_no_geom$lfp_female
-model_all <- lm(lfp_female ~ ., data=df_vars)
+model_all <- lm(lfp_female ~ pca1_stock + med_hh_income_1000 + avg_rooms_per_dwelling + percent_hh_with_children + percent_drivers_female + percent_publictransit_female , data=df_vars)
 summary(model_all)
 plot(residuals(model_all), ylab='residuals')
 plot(residuals(model_all) ~ df_vars$lfp_female, ylab='residuals', xlab='fitted value')
@@ -118,19 +117,19 @@ anova(model_no_sndi, model_all)
 
 ### Multilevel model
 ```{r lfp_multilevel}
-df_vars$cma_uid <- df$cma_uid
-model_cma <- lmer(lfp_female ~ pca1_stock + med_hh_income_1000 + avg_rooms_per_dwelling + percent_hh_with_children + percent_drivers_female + percent_publictransit_female + (1 | cma_uid), data=df_vars)
-summary(model_cma)
-plot(residuals(model_cma), ylab='residuals')
-plot(residuals(model_cma) ~ df_vars$lfp_female, ylab='residuals', xlab='fitted value')
-qqnorm(residuals(model_cma), main='Residual QQ Plot (normal dist)')
-qqline(residuals(model_cma))
+df_vars$csd_uid <- df$csd_uid
+model_csd <- lmer(lfp_female ~ pca1_stock + med_hh_income_1000 + avg_rooms_per_dwelling + percent_hh_with_children + percent_drivers_female + percent_publictransit_female + (1 | csd_uid), data=df_vars)
+summary(model_csd)
+plot(residuals(model_csd), ylab='residuals')
+plot(residuals(model_csd) ~ df_vars$lfp_female, ylab='residuals', xlab='fitted value')
+qqnorm(residuals(model_csd), main='Residual QQ Plot (normal dist)')
+qqline(residuals(model_csd))
 ```
 
 ### Gender Difference in LFP
 ```{r lfp_diff}
-df_vars$lfp_gap <- df_vars$lfp_male - df_vars$lfp_female
-model_gap <- lm(lfp_gap ~ . -lfp_female -lfp_male -cma_uid, data=df_vars)
+df_vars$lfp_gap <- df$lfp_gap
+model_gap <- lm(lfp_gap ~ . -lfp_female -csd_uid, data=df_vars)
 summary(model_gap)
 plot(residuals(model_gap), ylab='residuals')
 plot(residuals(model_gap) ~ df_vars$lfp_female, ylab='residuals', xlab='fitted value')
