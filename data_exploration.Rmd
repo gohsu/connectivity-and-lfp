@@ -144,7 +144,7 @@ plot(mtl_data['pca1_stock'], breaks='quantile')
 mtl_data_reg <- mtl_data[iv_colnames]
 mtl_data_reg <- st_set_geometry(mtl_data_reg, NULL) 
 mtl_data_reg$lfp_gap <- mtl_data$lfp_gap
-model_mtl <- lm(lfp_gap ~ . -lfp_male, data=mtl_data_reg)
+model_mtl <- lm(lfp_gap ~ ., data=mtl_data_reg)
 summary(model_mtl)
 plot(residuals(model_mtl), ylab='residuals')
 plot(residuals(model_mtl) ~ mtl_data_reg$lfp_gap, ylab='residuals', xlab='fitted value')
@@ -163,8 +163,19 @@ plot(to_data['pca1_stock'], breaks='quantile')
 to_data_reg <- to_data[iv_colnames]
 to_data_reg <- st_set_geometry(to_data_reg, NULL) 
 to_data_reg$lfp_gap <- to_data$lfp_gap
-model_to <- lm(lfp_gap ~ . -lfp_male, data=to_data_reg)
+model_to <- lm(lfp_gap ~ . , data=to_data_reg)
 summary(model_to)
 to_data$residuals <- model_to$residuals
 ggplot(to_data) + geom_sf(aes(fill = residuals), colour = "transparent") +   scale_fill_viridis_c(limits = c(-15, 20)) 
 ```
+
+### U-shape LFP?
+```{r}
+model_quad <- lm(lfp_female ~ poly(pca1_stock, 2), data=df)
+summary(model_quad)
+
+mtl_data %>% ggplot(aes(x=pca1_stock, y=lfp_female)) + geom_point() + stat_smooth(method = "lm", formula = y ~ poly(x,2), size = 1) + labs(x='SNDI', y='Female LFP (%)', title='Montreal')
+to_data %>% ggplot(aes(x=pca1_stock, y=lfp_female)) + geom_point() + stat_smooth(method = "lm", formula = y ~ poly(x,2), size = 1) + labs(x='SNDI', y='Female LFP (%)', title='Toronto')
+
+```
+
