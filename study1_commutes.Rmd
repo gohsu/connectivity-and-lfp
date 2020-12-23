@@ -7,6 +7,10 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(sf)
+library(tidyverse)
+library(ggplot2)
+library(reshape2)
 library(ggpubr)
 df <- st_read('data/CA16_CTs_all.gpkg')
 df <- na.omit(df)
