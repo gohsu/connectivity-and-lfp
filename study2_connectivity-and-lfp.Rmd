@@ -1,0 +1,125 @@
+---
+title: 'Study 2: Connectivity and LFP'
+author: "Su Goh"
+date: "22/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(sf)
+library(tidyverse)
+library(ggplot2)
+library(ggthemes)
+library(reshape2)
+library(lme4)
+library(lmtest)
+library(lmerTest)
+```
+
+```{r}
+df <- st_read('data/CA16_CTs_all.gpkg')
+df$percent_hh_with_children <- 100 * df$hh_with_children / df$hh_total
+df$percent_drivers_female <- 100 * df$commute_driver_female / (df$commute_driver_male + df$commute_driver_female)
+df$percent_publictransit_female <- 100 * df$commute_publictransit_female / (df$commute_publictransit_male + df$commute_publictransit_female)
+df$lfp_gap <- df$lfp_male - df$lfp_female
+df <- na.omit(df)
+df_no_geom <- st_drop_geometry(df)
+```
+## descriptives
+```{r desc}
+lfp <- rbind(data.frame(lfp = df$lfp_female, gender ='Female'), data.frame(lfp = df$lfp_male, gender ='Male'))
+ggplot(lfp, aes(x=lfp, fill=gender)) + geom_histogram(alpha=0.5, position="identity") + scale_x_continuous(breaks=seq(0,100,10)) + labs(x='LFP (%)') 
+avg_gap <- mean(df$lfp_gap)
+ggplot(df_no_geom, aes(lfp_gap)) + geom_histogram(color="black", fill="white", binwidth = 2) + geom_vline(xintercept = avg_gap, color='red') + labs(x='percentage points')
+avg_sndi <- mean(df$pca1_stock)
+ggplot(df, aes(pca1_stock)) + geom_histogram(color="black", fill="white") + geom_vline(xintercept=avg_sndi, color='red') + labs(x='SNDI') 
+st_drop_geometry(df[iv_colnames]) %>% summarise_all(mean) %>% t()
+```
+
+
+## determinants of LFP
+```{r lfp_all}
+iv_colnames <- c("pca1_stock", "med_hh_income_1000", "avg_rooms_per_dwelling", "percent_hh_with_children", "percent_drivers_female", "percent_publictransit_female")
+df_vars <- df_no_geom[iv_colnames]
+df_vars$lfp_female <- df_no_geom$lfp_female
+model_all <- lm(lfp_female ~ pca1_stock + med_hh_income_1000 + avg_rooms_per_dwelling + percent_hh_with_children + percent_drivers_female + percent_publictransit_female , data=df_vars)
+summary(model_all)
+plot(residuals(model_all), ylab='residuals')
+abline(h=0, col='red', lw=2)
+plot(residuals(model_all) ~ df_vars$lfp_female, ylab='residuals', xlab='fitted value')
+qqnorm(residuals(model_all), main=NULL)
+qqline(residuals(model_all))
+bptest(model_all)  # heteroskedasticity
+model_no_sndi <- lm(lfp_female ~ . -pca1_stock, data=df_vars)
+anova(model_no_sndi, model_all)
+```
+
+### multilevel model
+```{r lfp_multilevel}
+df_vars$csd_uid <- df$csd_uid
+model_csd <- lmer(lfp_female ~ pca1_stock + med_hh_income_1000 + avg_rooms_per_dwelling + percent_hh_with_children + percent_drivers_female + percent_publictransit_female + (1 | csd_uid), data=df_vars)
+summary(model_csd)
+plot(residuals(model_csd), ylab='residuals')
+plot(residuals(model_csd) ~ df_vars$lfp_female, ylab='residuals', xlab='fitted value')
+qqnorm(residuals(model_csd))
+qqline(residuals(model_csd))
+```
+
+## LFP gender diff ~ . 
+```{r lfp_diff}
+df_vars$lfp_gap <- df$lfp_gap
+model_gap <- lm(lfp_gap ~ . -lfp_female -csd_uid, data=df_vars)
+summary(model_gap)
+plot(residuals(model_gap), ylab='residuals')
+plot(residuals(model_gap) ~ df_vars$lfp_female, ylab='residuals', xlab='fitted value')
+qqnorm(residuals(model_gap), main='Residual QQ Plot (normal dist)')
+qqline(residuals(model_gap))
+```
+
+
+## Comparative by SNDI
+```{r sndi}
+df_no_geom %>% 
+  group_by(csd_uid) %>% 
+  summarise(sndi_csd = mean(pca1_stock), pop_csd = sum(population)) %>% 
+  filter(pop_csd > 1000000) %>%
+  arrange(sndi_csd)
+low_sndi <- filter(df, csd_uid == '2466023')
+high_sndi <- filter(df, csd_uid == '4806016')
+```
+
+### Low SNDI
+```{r mtl}
+ggplot(low_sndi, aes(fill=lfp_female)) + geom_sf() + scale_fill_viridis_b() + labs(fill='LFP (%)') +  theme(axis.text.x = element_blank(), axis.text.y = element_blank(), axis.ticks = element_blank(), rect = element_blank())
+ggplot(low_sndi, aes(fill=pca1_stock)) + geom_sf() + scale_fill_viridis_b() + labs(fill='SNDI')+  theme(axis.text.x = element_blank(), axis.text.y = element_blank(), axis.ticks = element_blank(), rect = element_blank())
+low_sndi_reg <- st_drop_geometry(low_sndi[iv_colnames])
+low_sndi_reg$lfp_female <- low_sndi$lfp_female
+model_low <- lm(lfp_female ~ ., data=low_sndi_reg)
+summary(model_low)
+plot(residuals(model_low), ylab='residuals')
+plot(residuals(model_low) ~ low_sndi_reg$lfp_female, ylab='residuals', xlab='fitted value')
+qqnorm(residuals(model_low), main='Residual QQ Plot (normal dist)')
+qqline(residuals(model_low))
+```
+
+### High SNDI
+```{r cal}
+ggplot(high_sndi, aes(fill=lfp_female)) + geom_sf() + scale_fill_viridis_b() + labs(fill='LFP (%)') +  theme(axis.text.x = element_blank(), axis.text.y = element_blank(), axis.ticks = element_blank(), rect = element_blank())
+ggplot(high_sndi, aes(fill=pca1_stock)) + geom_sf() + scale_fill_viridis_b() + labs(fill='SNDI') +  theme(axis.text.x = element_blank(), axis.text.y = element_blank(), axis.ticks = element_blank(), rect = element_blank())
+high_sndi_reg <- st_drop_geometry(high_sndi[iv_colnames])
+high_sndi_reg$lfp_female <- high_sndi$lfp_female
+model_high <- lm(lfp_female ~ ., data=high_sndi_reg)
+summary(model_high)
+plot(residuals(model_high), ylab='residuals')
+plot(residuals(model_high) ~ high_sndi_reg$lfp_female, ylab='residuals', xlab='fitted value')
+qqnorm(residuals(model_high), main='Residual QQ Plot (normal dist)')
+qqline(residuals(model_high))
+```
+
+## grouped by SNDI?
+```{r}
+df_sndi <- data.frame(sndi=df_no_geom$pca1_stock, sndi_level=if_else(df_no_geom$pca1_stock<2.52, '>= avg', '< avg'), lfp=df_no_geom$lfp_female)
+ggplot(df_sndi, aes(x=sndi, y=lfp)) + geom_point(alpha=0.2) + geom_smooth(method='lm', se=FALSE, aes(color = sndi_level)) + labs(y='Female LFP (%)', x='SNDI', color='SNDI') +theme_bw() 
+```
+

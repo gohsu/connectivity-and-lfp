@@ -13,8 +13,7 @@ census_vars <- c("v_CA16_425",  # Average household size
                  "v_CA16_4855", # Average number of rooms per dwelling
                  "v_CA16_5613", # LFP; male
                  "v_CA16_5614", # LFP; female
-                 "v_CA16_5793", # commuting mode: total no. male respondents
-                 "v_CA16_5794", # commuting mode: total no. female respondents
+                 "v_CA16_5792", # commuting mode: total no. respondents
                  "v_CA16_5796", # commuting mode: car as driver; male
                  "v_CA16_5797", # commuting mode: car as driver; female
                  "v_CA16_5799", # commuting mode: car as passenger; male
@@ -23,8 +22,7 @@ census_vars <- c("v_CA16_425",  # Average household size
                  "v_CA16_5803", # commuting mode: public transit; female
                  "v_CA16_5805", # commuting mode: walk; male
                  "v_CA16_5806", # commuting mode: walk; female
-                 "v_CA16_5814", # commuting duration: total no. male respondents
-                 "v_CA16_5815", # commuting duration: total no. female respondents
+                 "v_CA16_5813", # commuting duration: total no. respondents
                  "v_CA16_5817", # commuting duration: < 15 min; male
                  "v_CA16_5818", # commuting duration: < 15 min; female
                  "v_CA16_5820", # commuting duration: 15-29 min; male
@@ -44,15 +42,14 @@ census_cts <- get_census(dataset='CA16',
 colnames(census_cts) <- tolower(colnames(census_cts))
 colnames(census_cts) <- gsub(" ", "_", colnames(census_cts))
 colnames(census_cts)[13] <- c('area_km_sq')
-colnames(census_cts)[14:42] <- c("avg_hh_size", 
+colnames(census_cts)[14:40] <- c("avg_hh_size", 
                                  "hh_total",
                                  "hh_with_children",
                                  "med_hh_income_1000",
                                  "avg_rooms_per_dwelling",
                                  "lfp_male",
                                  "lfp_female",
-                                 "commute_mode_male",
-                                 "commute_mode_female",
+                                 "commute_mode_all",
                                  "commute_driver_male",
                                  "commute_driver_female",
                                  "commute_passenger_male",
@@ -61,8 +58,7 @@ colnames(census_cts)[14:42] <- c("avg_hh_size",
                                  "commute_publictransit_female",
                                  "commute_walk_male",
                                  "commute_walk_female",
-                                 "commute_time_male",
-                                 "commute_time_female",
+                                 "commute_time_all",
                                  "commute_time_lt15_male",
                                  "commute_time_lt15_female",
                                  "commute_time_15to29_male",

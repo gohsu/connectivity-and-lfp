@@ -6,7 +6,7 @@ api_key.txt
 
 # data dir
 /data/CA16_CTs_cancensus.csv 
-/data/CA16_CTs_geometries.gpkg
+/data/CA16_CTs_cancensus.gpkg
 /data/CA16_CTs_sns.tsv
 
 # History files

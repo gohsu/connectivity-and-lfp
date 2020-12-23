@@ -1,0 +1,102 @@
+---
+title: 'Study 1: Commuting Behaviour'
+author: "Su Goh"
+date: "22/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggpubr)
+df <- st_read('data/CA16_CTs_all.gpkg')
+df <- na.omit(df)
+```
+
+## Descriptives
+```{r}
+summary(st_drop_geometry(df[,21:42]))
+commute_modes_female <- data.frame(driver=df$commute_driver_female, passenger=df$commute_passenger_female, transit=df$commute_publictransit_female, walk=df$commute_walk_female) 
+commute_modes_female$gender <- 'Female'
+commute_modes_male <- data.frame(driver=df$commute_driver_male, passenger=df$commute_passenger_male, transit=df$commute_publictransit_male, walk=df$commute_walk_male) 
+commute_modes_male$gender <- 'Male'
+commute_modes <- rbind(commute_modes_female, commute_modes_male)
+ggplot(melt(commute_modes), aes(x=variable, y=value, fill=gender)) + 
+  geom_boxplot(outlier.shape =NA)  + 
+  coord_cartesian(ylim=c(0,2000)) + 
+  labs(x=NULL, y='count', fill='Gender') + 
+  theme_bw()
+commute_time_female <- data.frame(t15=df$commute_time_lt15_female, t15to29=df$commute_time_15to29_female, t30to44=df$commute_time_30to44_female, t45to59=df$commute_time_45to59_female, t60=df$commute_time_gt60_female) 
+commute_time_female$gender <- 'Female'
+commute_time_male <- data.frame(t15=df$commute_time_lt15_male, t15to29=df$commute_time_15to29_male, t30to44=df$commute_time_30to44_male, t45to59=df$commute_time_45to59_male, t60=df$commute_time_gt60_male) 
+commute_time_male$gender <- 'Male'
+commute_times <- rbind(commute_time_female, commute_time_male)
+ggplot(melt(commute_times), aes(x=variable, y=value, fill=gender)) + 
+  geom_boxplot(outlier.shape=NA)  + 
+  coord_cartesian(ylim=c(0,900)) +
+  scale_x_discrete(labels=c('<15', '15-29', '30-44', '45-59', '>60')) +
+  labs(x='Commuting duration (minutes)', y='count', fill='Gender') +
+  theme_bw()
+```
+
+## t-tests on commute mode and duration
+```{r}
+t.test(commute_modes_female$driver, commute_modes_male$driver, alternative='less', var.equal=TRUE, paired=TRUE)
+t.test(commute_modes_female$passenger, commute_modes_male$passenger, alternative='greater', var.equal=TRUE, paired=TRUE)
+t.test(commute_modes_female$transit, commute_modes_male$transit, alternative='greater', var.equal=TRUE, paired=TRUE)
+t.test(commute_modes_female$walk, commute_modes_male$walk, alternative='greater', var.equal=TRUE, paired=TRUE)
+t.test(commute_time_female$t15, commute_time_male$t15, alternative='greater',var.equal=TRUE, paired=TRUE)
+t.test(commute_time_female$t15to29, commute_time_male$t15to29, alternative='less',var.equal=TRUE, paired=TRUE)
+t.test(commute_time_female$t30to44, commute_time_male$t30to44, alternative='less',var.equal=TRUE, paired=TRUE)
+t.test(commute_time_female$t45to59, commute_time_male$t45to59, alternative='less',var.equal=TRUE, paired=TRUE)
+t.test(commute_time_female$t60, commute_time_male$t60, alternative='less',var.equal=TRUE, paired=TRUE)
+```
+
+
+## Correlation with SNDI: Commute mode
+```{r}
+df$commute_mode_prop_driver <- (df$commute_driver_female + df$commute_driver_male) / df$commute_mode_all
+df$commute_mode_prop_publictransit <- (df$commute_publictransit_female + df$commute_publictransit_male) / df$commute_mode_all
+df$commute_mode_prop_passenger <- (df$commute_passenger_female + df$commute_passenger_male) / df$commute_mode_all
+df$commute_mode_prop_walk <- (df$commute_walk_female + df$commute_walk_male) / df$commute_mode_all
+ggscatter(df, y = "commute_mode_prop_driver", x = "pca1_stock", 
+          add = "reg.line", add.params = list(color = "red", fill = "lightgray"),
+          conf.int = TRUE,
+          xlab='SNDI', ylab='Proportion of drivers', alpha=0.2) + 
+    coord_cartesian(ylim=c(0,1)) +
+  stat_cor(method='pearson', label.x=8, label.y=0)
+
+ggscatter(df, y = "commute_mode_prop_passenger", x = "pca1_stock", 
+          add = "reg.line", add.params = list(color = "red", fill = "lightgray"),
+          conf.int = TRUE,
+          xlab='SNDI', ylab='Proportion of passengers', alpha=0.2) + 
+  coord_cartesian(ylim=c(0,1)) +
+  stat_cor(method='pearson', label.x=8, label.y=0.95)
+
+ggscatter(df, y = "commute_mode_prop_publictransit", x = "pca1_stock", 
+          add = "reg.line", add.params = list(color = "red", fill = "lightgray"),
+          conf.int = TRUE,
+          xlab='SNDI', ylab='Proportion of public transit users', alpha=0.2) + 
+  coord_cartesian(ylim=c(0,1)) +
+  stat_cor(method='pearson', label.x=8, label.y=0.95)
+
+ggscatter(df, y = "commute_mode_prop_walk", x = "pca1_stock", 
+          add = "reg.line", add.params = list(color = "red", fill = "lightgray"),
+          conf.int = TRUE,
+          xlab='SNDI', ylab='Proportion of walkers', alpha=0.2) + 
+  coord_cartesian(ylim=c(0,1)) +
+  stat_cor(method='pearson', label.x=8, label.y=0.95)
+```
+
+## Correlation with SNDI: Commute time
+```{r}
+df$commute_time_prop_lt15 <- (df$commute_time_lt15_female + df$commute_time_lt15_female)/df$commute_time_all
+df$commute_time_prop_15to29 <- (df$commute_time_15to29_female + df$commute_time_15to29_male) / df$commute_time_all
+df$commute_time_prop_30to44 <- (df$commute_time_30to44_female + df$commute_time_30to44_male) / df$commute_time_all
+df$commute_time_prop_45to59 <- (df$commute_time_45to59_female + df$commute_time_45to59_male) / df$commute_time_all
+df$commute_time_prop_gt60 <- (df$commute_time_gt60_female + df$commute_time_gt60_male)/df$commute_time_all
+cor.test(df$commute_time_prop_lt15, df$pca1_stock)
+cor.test(df$commute_time_prop_15to29, df$pca1_stock)
+cor.test(df$commute_time_prop_30to44, df$pca1_stock)
+cor.test(df$commute_time_prop_45to59, df$pca1_stock)
+cor.test(df$commute_time_prop_gt60, df$pca1_stock)
+```
